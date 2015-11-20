@@ -11,3 +11,162 @@ CakePHP 2
 /app/Config/core.php
 /app/Config/database.php
 /vendors/*
+
+<html>
+<head>
+	<meta http-equiv="Content-Type" content="text/html"; charset="UTF-8">
+	<title>機讀書目資料輸入</title>
+</head>
+<body>
+   <pre>
+   <?php
+    ini_set("memory_limit","600M");
+	set_time_limit(1000);
+	ini_set("upload_max_filesize","400M");
+	ini_set("post_max_size","500M");
+	
+	// 檔案位置
+	$filename = 'test.txt';
+	
+	// 開啟檔案
+	$fopen = fopen($filename, 'r');
+	
+	if($fopen == false)
+	{
+		echo '檔案開啟失敗！';
+		exit;
+	}
+	else
+	{
+		// 將檔案指標移至最前方
+		fseek($fopen, 0);
+		
+		// 取得檔案內容
+		$getData = fread($fopen, filesize($filename));
+		$getData = str_replace("                          ","",$getData);
+		$getData = str_replace("記錄號碼:","Heading : 9923 missing",$getData);
+		$getData = str_replace("Record number :","Heading : 9923 missing",$getData);
+		
+		//=========================處理檔案資料==========================
+		$output = explode("Heading : 9923 missing",$getData);//用explode切割陣列
+	
+
+	$link=mysql_connect("localhost","root","555888") or die("連線失敗：".mysql_error());
+	mysql_select_db("nclinput")or die("無法選擇資料庫");	
+
+	$query = "select sql_calc_found_rows * from ncl";
+	$result = mysql_query($query) or die("資料輸入錯誤：".mysql_error());
+	$original=mysql_num_rows($result);
+	echo $original;
+	
+	//count會比實際個數多一個
+	for($t=1;$t<count($output);$t++){
+		
+		$link=mysql_connect("localhost","root","555888") or die("連線失敗：".mysql_error());
+		mysql_select_db("nclinput")or die("無法選擇資料庫");
+		//echo count($output);
+		//$t=$t+mysql_num_rows($result);
+		
+		$output1 = explode("     ",$output[$t]);//用空白切割陣列
+		$output1 = array_filter($output1);//過濾掉NULL元素
+		//print_r($output1);
+		
+		for($i=0;$i<count($output1);$i++)
+		{
+			$output1[$i] = trim($output1[$i]);//去除掉元素中的空白
+		}
+		
+		$output1 = array_values($output1);//重新排序陣列元素
+		$first = array_shift($output1);//去除掉第一個元素
+		$output1 = array_filter($output1);//過濾掉NULL元素
+		
+		//結合相同欄位的值成新陣列
+		for($i=0;$i<count($output1);$i=$i+2)
+		{
+			for($j=$i+2;$j<count($output1);$j=$j+2)
+			{
+				if($output1[$i]==$output1[$j])
+				{
+					        $output1[$i+1] = $output1[$i+1].$output1[$j+1];
+							$output1[$j] = NULL;
+							$output1[$j+1] = NULL;
+				}
+			}
+		}
+		$output1 = array_filter($output1);//過濾掉NULL元素
+		$output1 = array_values($output1);//重新排序陣列元素
+		print_r($output1);
+
+		//=====================連線資料庫並新增資料及欄位=================
+		
+		//建立索引
+		$test = Id;
+		//echo $t."<br>";
+		//echo $original;
+		$test1 = $t+$original;
+		echo "<br>"."索引".$test1."<br>";
+		//echo $test1;
+		$query = "insert into ncl ($test) values ($test1)";
+		mysql_query($query) or die("資料輸入錯誤：".mysql_error());
+		
+		
+				echo "<br>"."標準欄位"."<br>";
+				//檢查有無新欄位
+				for($i=0;$i<count($output1);$i=$i+2){
+					
+					$output1[$i] = "A".$output1[$i];//改變欄位成標準型，前面要加字母
+					$output1[$i] = str_replace(" ","_",$output1[$i]);//改變欄位成標準型，空白要加底線
+					echo $output1[$i]."<br>";
+				
+					$query = "show columns from ncl"; //忘記加了
+					$result = mysql_query($query) or die("資料輸入錯誤：".mysql_error()); //忘記加了
+					
+					while($row_result = mysql_fetch_assoc($result)){
+					
+						//echo $output1[$i];
+						//echo $row_result[Field];
+					
+						if($row_result[Field]==$output1[$i]){
+							$flag = "true";
+							break;
+						
+						}			
+						else{
+							$flag = "false";
+						}
+					}
+					
+					//echo $flag;
+					
+					if($flag == "false"){
+						//echo $output1[$i];
+						
+						$query = "alter table ncl add `$output1[$i]` text";//若欄位不存在，則新增一個欄位，varchar(255)，中文字3byte，英文字1byte，text一萬多
+						mysql_query($query) or die("資料輸入錯誤：".mysql_error());
+					}
+				}	
+				
+				echo "<br>"."欄位值："."<br>";
+				
+				//將所有資料更新插入進去 只能用在表格或欄位
+				for($i=0;$i<count($output1);$i=$i+2){
+				
+					$field = $output1[$i];
+					$value = $output1[$i+1];
+					$key_value = $test1;
+					
+					$value = addslashes($output1[$i+1]);//addslash 取代UTF-8 取代反斜線等方法
+					echo $value."<br>";
+					
+					$query = "update ncl set `$field` = '$value' where `Id` = '$key_value'";//欄位已存在，則下一個元素即為資料存入表中	
+					mysql_query($query) or die("資料輸入錯誤：".mysql_error());	
+				}
+				echo "<br>";
+				mysql_close($link);	
+			
+		}//endfor
+	}//endelse
+	?>
+	</pre>
+</body>
+</html>
